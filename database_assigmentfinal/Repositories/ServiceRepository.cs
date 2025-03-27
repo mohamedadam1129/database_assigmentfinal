@@ -1,14 +1,18 @@
 ﻿using database_assigmentfinal.DataContext;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using database_assigmentfinal.Entites;
+using database_assigmentfinal.Repositories; 
 using System.Threading.Tasks;
 
-namespace database_assigmentfinal.Repositories
-{
-    public class ServiceRepository(Databasecontext context)
+    public interface IServiceRepository : IBaseRepository<ServiceEntity>
     {
-        private readonly Databasecontext _context = context; 
+        
     }
-}
+
+    public class ServiceRepository : Baserepository<ServiceEntity>
+    {
+        public ServiceRepository(Databasecontext context) : base(context)
+        {
+         
+        }
+
+} 

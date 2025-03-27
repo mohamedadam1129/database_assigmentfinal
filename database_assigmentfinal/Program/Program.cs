@@ -1,16 +1,58 @@
-﻿using database_assigmentfinal;
-using database_assigmentfinal.DataContext;
+﻿using database_assigmentfinal.DataContext;
+using database_assigmentfinal.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
 
 namespace database_assigmentfinal
 {
     class Program
     {
-        private static readonly Databasecontext _context = new();
-
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            InitializeDatabase();
+            
+            var host = Host.CreateDefaultBuilder(args)
+                .ConfigureServices((context, services) =>
+                {
+                   
+                    services.AddDbContext<Databasecontext>(options =>
+                        options.UseSqlServer("Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=C:\\Users\\moomea\\source\\repos\\database_assigmentfinal\\database_assigmentfinal\\DataContext\\Database\\locall_db.mdf;Integrated Security=True;Connect Timeout=30;Encrypt=True")); 
+
+                   
+                    services.AddScoped(typeof(IBaseRepository<>), typeof(Baserepository<>));
+                    services.AddScoped<IProjectRepository, ProjectRepository>();
+
+                    
+                    services.AddTransient<ProjectManagementSystem>();
+                })
+                .Build();
+
+            
+            using (var scope = host.Services.CreateScope())
+            {
+                var serviceProvider = scope.ServiceProvider;
+                var projectManagementSystem = serviceProvider.GetRequiredService<ProjectManagementSystem>();
+                await projectManagementSystem.RunAsync();
+            }
+        }
+    }
+
+    
+    public class ProjectManagementSystem
+    {
+        private readonly IProjectRepository _projectRepository;
+
+        public ProjectManagementSystem(IProjectRepository projectRepository)
+        {
+            _projectRepository = projectRepository;
+        }
+
+        public async Task RunAsync()
+        {
             bool running = true;
 
             while (running)
@@ -25,10 +67,10 @@ namespace database_assigmentfinal
                 switch (Console.ReadLine())
                 {
                     case "1":
-                        ViewProjects();
+                        await ViewProjectsAsync();
                         break;
                     case "2":
-                        AddProject();
+                        await AddProjectAsync();
                         break;
                     case "3":
                         running = false;
@@ -41,23 +83,19 @@ namespace database_assigmentfinal
             }
         }
 
-        private static void InitializeDatabase()
-        {
-            _context.Database.EnsureCreated();
-        }
-
-        private static void ViewProjects()
+        private async Task ViewProjectsAsync()
         {
             while (true)
             {
                 Console.Clear();
-                var projects = _context.Projects.OrderBy(p => p.ProjectNumber).ToList();
+                var projects = await _projectRepository.GetAsync();
+                var orderedProjects = projects.OrderBy(p => p.ProjectNumber).ToList();
 
                 Console.WriteLine("Current Projects:");
                 Console.WriteLine("No.\tName\tPeriod\t\t\tStatus");
                 Console.WriteLine(new string('-', 50));
 
-                foreach (var project in projects)
+                foreach (var project in orderedProjects)
                 {
                     Console.WriteLine($"{project.ProjectNumber}\t{project.Name}\t{project.StartDate:d} - {project.EndDate:d}\t{project.Status}");
                 }
@@ -66,10 +104,10 @@ namespace database_assigmentfinal
                 if (int.TryParse(Console.ReadLine(), out int selection))
                 {
                     if (selection == 0) break;
-                    var selectedProject = projects.FirstOrDefault(p => p.ProjectNumber == selection);
+                    var selectedProject = orderedProjects.FirstOrDefault(p => p.ProjectNumber == selection);
                     if (selectedProject != null)
                     {
-                        EditProject(selectedProject);
+                        await EditProjectAsync(selectedProject);
                     }
                     else
                     {
@@ -80,13 +118,15 @@ namespace database_assigmentfinal
             }
         }
 
-        private static void AddProject()
+        private async Task AddProjectAsync()
         {
             Console.Clear();
-            var project = new database_assigmentfinal.Project  
+            var projects = await _projectRepository.GetAsync();
+            var project = new Project
             {
-                ProjectNumber = _context.Projects.Any() ? _context.Projects.Max(p => p.ProjectNumber) + 1 : 1
+                ProjectNumber = projects.Any() ? projects.Max(p => p.ProjectNumber) + 1 : 1
             };
+
             Console.WriteLine("Add New Project");
             Console.WriteLine("Enter project details:");
 
@@ -117,14 +157,13 @@ namespace database_assigmentfinal
 
             project.Status = ProjectStatus.NotStarted;
 
-            _context.Projects.Add(project);
-            _context.SaveChanges();
+            await _projectRepository.AddAsync(project);
 
             Console.WriteLine("\nProject added successfully! Press any key to continue...");
             Console.ReadKey();
         }
 
-        private static void EditProject(database_assigmentfinal.Project project)
+        private async Task EditProjectAsync(Project project)
         {
             while (true)
             {
@@ -187,7 +226,7 @@ namespace database_assigmentfinal
                             project.Status = (ProjectStatus)(status - 1);
                         break;
                     case "9":
-                        _context.SaveChanges();
+                        await _projectRepository.UpdateAsync(project);
                         return;
                     case "0":
                         return;
@@ -196,4 +235,3 @@ namespace database_assigmentfinal
         }
     }
 }
-
